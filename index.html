@@ -76,6 +76,9 @@
     .controls{ position:static; max-width:100%; order:2; }
     main{ flex-direction:column; }
   }
+  @media (min-width:861px){
+    #previewPanel{ display:flex !important; }
+  }
 
   .section-label{
     font-family:'JetBrains Mono',monospace;
@@ -546,6 +549,7 @@
         </div>
       </div>
     </div>
+    <div class="footer-note" id="compareHint" style="display:none;">na tela, as duas versões aparecem do mesmo tamanho — passe o mouse/dedo sobre a imagem pra ver a lupa com o zoom real e notar a diferença de nitidez</div>
   </div>
 </main>
 
@@ -710,6 +714,8 @@
       resultActions.style.display = 'none';
       processBtn.disabled = false;
       controlsLocked.classList.add('unlocked');
+      previewPanel.style.display = 'flex';
+      renderInitialPreview();
       updateEstimate();
       if(mode==='impressao') updateVerdict();
       URL.revokeObjectURL(url);
@@ -817,6 +823,7 @@
     before.className = 'img-before';
     wrap.appendChild(before);
     stage.appendChild(wrap);
+    document.getElementById('compareHint').style.display = 'none';
   }
 
   // ---------- core: Lanczos resample (separable) ----------
@@ -1055,6 +1062,7 @@
     stage.classList.remove('empty');
     const wrap = document.getElementById('compareWrap');
     wrap.querySelectorAll('.img-after,.divider,.tag-before,.tag-after,.loupe').forEach(n=>n.remove());
+    document.getElementById('compareHint').style.display = 'block';
 
     const after = document.createElement('img');
     after.src = resultCanvas.toDataURL('image/png');
