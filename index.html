@@ -1,0 +1,1177 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ImagemHD — Ampliador sem IA</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --graphite-900:#14171A;
+    --graphite-800:#1C2024;
+    --graphite-700:#262B30;
+    --graphite-600:#343A40;
+    --ember:#E8650A;
+    --ember-dim:#5C2C0E;
+    --cyan:#00C2C7;
+    --cyan-dim:#0A4547;
+    --green:#3FB27F;
+    --yellow:#F5A623;
+    --red:#E84C3D;
+    --paper:#F2F4F5;
+    --mist:#8B939B;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--graphite-900);
+    background-image:
+      radial-gradient(ellipse 900px 500px at 8% -10%, rgba(232,101,10,0.10), transparent 60%),
+      radial-gradient(ellipse 700px 500px at 100% 0%, rgba(0,194,199,0.08), transparent 60%);
+    color:var(--paper);
+    font-family:'Inter',system-ui,sans-serif;
+    min-height:100vh;
+    -webkit-font-smoothing:antialiased;
+  }
+  .mono{font-family:'JetBrains Mono',monospace;}
+  .display{font-family:'Space Grotesk',sans-serif;}
+
+  header{
+    padding:22px 20px 14px;
+    border-bottom:1px solid var(--graphite-700);
+    display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;
+  }
+  header .logo{
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:700; font-size:22px; letter-spacing:-0.02em;
+    display:flex; align-items:center; gap:8px;
+  }
+  header .logo .dot{color:var(--ember);}
+  header .tag{
+    color:var(--mist); font-size:12.5px; font-family:'JetBrains Mono',monospace;
+    letter-spacing:0.02em;
+  }
+
+  main{
+    max-width:1220px; margin:0 auto; padding:22px 16px 80px;
+    display:flex; gap:22px; flex-wrap:wrap;
+    align-items:flex-start;
+  }
+
+  .panel{
+    background:var(--graphite-800);
+    border:1px solid var(--graphite-700);
+    border-radius:14px;
+    padding:18px;
+  }
+
+  .controls{
+    width:100%; max-width:360px; flex-shrink:0;
+    position:sticky; top:16px;
+    display:flex; flex-direction:column; gap:16px;
+  }
+  @media (max-width:860px){
+    .controls{ position:static; max-width:100%; order:2; }
+    main{ flex-direction:column; }
+  }
+
+  .section-label{
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px; letter-spacing:0.08em; text-transform:uppercase;
+    color:var(--mist); margin:0 0 10px;
+  }
+
+  .dropzone{
+    border:1.5px dashed var(--graphite-600);
+    border-radius:12px;
+    padding:24px 14px;
+    text-align:center;
+    cursor:pointer;
+    transition:border-color .15s, background .15s;
+  }
+  .dropzone:hover, .dropzone.drag{
+    border-color:var(--ember);
+    background:rgba(232,101,10,0.06);
+  }
+  .dropzone svg{opacity:0.6; margin-bottom:8px;}
+  .dropzone .main-txt{font-size:14px; font-weight:500;}
+  .dropzone .sub-txt{font-size:12px; color:var(--mist); margin-top:4px;}
+  input[type=file]{display:none;}
+
+  /* use-case segmented control */
+  .usecase-grid{
+    display:flex; flex-direction:column; gap:8px;
+  }
+  .usecase-btn{
+    display:flex; align-items:center; gap:10px;
+    background:var(--graphite-700);
+    border:1px solid var(--graphite-600);
+    color:var(--paper);
+    border-radius:10px;
+    padding:11px 12px;
+    cursor:pointer;
+    text-align:left;
+    transition:all .12s;
+  }
+  .usecase-btn .ic{font-size:17px; width:22px; text-align:center; flex-shrink:0;}
+  .usecase-btn .tx{display:flex; flex-direction:column; gap:1px;}
+  .usecase-btn .tx .t1{font-size:13.5px; font-weight:600;}
+  .usecase-btn .tx .t2{font-size:11.5px; color:var(--mist);}
+  .usecase-btn:hover{border-color:var(--cyan);}
+  .usecase-btn.active{ background:rgba(232,101,10,0.12); border-color:var(--ember); }
+  .usecase-btn.active .tx .t2{color:var(--paper); opacity:.75;}
+
+  .subpanel{
+    display:none;
+    flex-direction:column; gap:14px;
+    padding-top:2px;
+  }
+  .subpanel.show{display:flex;}
+
+  .scale-grid{
+    display:grid; grid-template-columns:repeat(4,1fr); gap:8px;
+  }
+  .scale-btn{
+    background:var(--graphite-700);
+    border:1px solid var(--graphite-600);
+    color:var(--paper);
+    border-radius:9px;
+    padding:10px 0;
+    font-family:'JetBrains Mono',monospace;
+    font-size:13px; font-weight:600;
+    cursor:pointer;
+    transition:all .12s;
+  }
+  .scale-btn:hover{border-color:var(--cyan);}
+  .scale-btn.active{
+    background:var(--ember);
+    border-color:var(--ember);
+    color:#1a0d05;
+  }
+
+  select, .cm-input{
+    width:100%; background:var(--graphite-700); border:1px solid var(--graphite-600);
+    color:var(--paper); border-radius:9px; padding:10px 11px; font-size:13.5px;
+    font-family:'Inter',sans-serif;
+  }
+  select:focus, .cm-input:focus{outline:1px solid var(--cyan);}
+
+  .cm-row{display:flex; gap:8px; align-items:center;}
+  .cm-row .cm-input{flex:1; font-family:'JetBrains Mono',monospace;}
+  .cm-row .x{color:var(--mist); font-size:13px;}
+
+  .field{display:flex; flex-direction:column; gap:8px;}
+  .field-row{display:flex; justify-content:space-between; align-items:baseline;}
+  .field-row label{font-size:13.5px; font-weight:500;}
+  .field-row .val{font-family:'JetBrains Mono',monospace; font-size:12.5px; color:var(--cyan);}
+
+  input[type=range]{
+    -webkit-appearance:none; appearance:none;
+    width:100%; height:4px; border-radius:2px;
+    background:var(--graphite-600);
+    outline:none;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none; appearance:none;
+    width:16px; height:16px; border-radius:50%;
+    background:var(--ember);
+    border:2px solid var(--graphite-900);
+    cursor:pointer;
+    margin-top:-6px;
+  }
+  input[type=range]::-moz-range-thumb{
+    width:14px; height:14px; border-radius:50%;
+    background:var(--ember); border:2px solid var(--graphite-900); cursor:pointer;
+  }
+  input[type=range]::-webkit-slider-runnable-track{ height:4px; border-radius:2px; background:var(--graphite-600); }
+
+  .toggle-row{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:10px 12px;
+    background:var(--graphite-700);
+    border-radius:9px;
+    gap:10px;
+  }
+  .toggle-row .lbl{font-size:13.5px;}
+  .toggle-row .sub{font-size:11.5px; color:var(--mist); margin-top:2px;}
+  .switch{
+    position:relative; width:38px; height:22px; flex-shrink:0;
+  }
+  .switch input{display:none;}
+  .switch .track{
+    position:absolute; inset:0; background:var(--graphite-600);
+    border-radius:11px; transition:background .15s; cursor:pointer;
+  }
+  .switch .track::after{
+    content:''; position:absolute; top:2px; left:2px;
+    width:18px; height:18px; border-radius:50%;
+    background:var(--paper); transition:transform .15s;
+  }
+  .switch input:checked + .track{background:var(--cyan-dim); }
+  .switch input:checked + .track::after{ transform:translateX(16px); background:var(--cyan); }
+
+  .btn{
+    width:100%; padding:13px; border-radius:10px; border:none;
+    font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:14.5px;
+    cursor:pointer; transition:filter .12s, transform .05s;
+  }
+  .btn:active{transform:scale(0.98);}
+  .btn-primary{ background:var(--ember); color:#1a0d05; }
+  .btn-primary:hover{filter:brightness(1.08);}
+  .btn-primary:disabled{ background:var(--graphite-600); color:var(--mist); cursor:not-allowed; }
+  .btn-secondary{ background:var(--graphite-700); color:var(--paper); border:1px solid var(--graphite-600); }
+  .btn-secondary:hover{ border-color:var(--cyan); }
+  .btn-ghost{ background:transparent; color:var(--cyan); border:1px solid var(--cyan-dim); font-size:13px; padding:10px; }
+  .btn-ghost:hover{ background:rgba(0,194,199,0.08); }
+  .btn-row{display:flex; gap:8px;}
+  .btn-row .btn{flex:1;}
+
+  .stats{
+    display:grid; grid-template-columns:1fr 1fr; gap:10px;
+  }
+  .stat-box{
+    background:var(--graphite-700); border-radius:9px; padding:10px 12px;
+  }
+  .stat-box .k{font-size:10.5px; color:var(--mist); font-family:'JetBrains Mono',monospace; text-transform:uppercase; letter-spacing:.05em;}
+  .stat-box .v{font-family:'JetBrains Mono',monospace; font-size:14.5px; margin-top:3px; color:var(--paper);}
+  .stat-box .v.accent{color:var(--cyan);}
+
+  /* verdict badge */
+  .verdict{
+    border-radius:11px; padding:13px 14px; border:1px solid;
+    display:flex; flex-direction:column; gap:8px;
+  }
+  .verdict.ok{ background:rgba(63,178,127,0.10); border-color:rgba(63,178,127,0.35); }
+  .verdict.mid{ background:rgba(245,166,35,0.10); border-color:rgba(245,166,35,0.35); }
+  .verdict.bad{ background:rgba(232,76,61,0.10); border-color:rgba(232,76,61,0.35); }
+  .verdict .head{ display:flex; align-items:center; gap:8px; font-weight:600; font-size:13.5px; }
+  .verdict.ok .head{color:var(--green);}
+  .verdict.mid .head{color:var(--yellow);}
+  .verdict.bad .head{color:var(--red);}
+  .verdict .dot{width:8px; height:8px; border-radius:50%; background:currentColor;}
+  .verdict .desc{font-size:12.5px; color:var(--mist); line-height:1.5;}
+  .verdict .msgbox{
+    background:var(--graphite-900); border:1px solid var(--graphite-700); border-radius:8px;
+    padding:10px; font-size:12px; color:var(--paper); line-height:1.5; font-family:'Inter',sans-serif;
+  }
+
+  .preview-panel{
+    flex:1; min-width:300px;
+    display:flex; flex-direction:column; gap:14px;
+  }
+  .stage{
+    position:relative;
+    background:
+      linear-gradient(45deg, #20242a 25%, transparent 25%),
+      linear-gradient(-45deg, #20242a 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, #20242a 75%),
+      linear-gradient(-45deg, transparent 75%, #20242a 75%);
+    background-size:20px 20px;
+    background-position:0 0, 0 10px, 10px -10px, -10px 0px;
+    background-color:#16191c;
+    border:1px solid var(--graphite-700);
+    border-radius:14px;
+    overflow:hidden;
+    min-height:280px;
+    display:flex; align-items:center; justify-content:center;
+    cursor:crosshair;
+    user-select:none;
+  }
+  .stage.empty{ cursor:default; }
+  .stage.empty .empty-msg{
+    color:var(--mist); font-size:13.5px; text-align:center; padding:40px 20px;
+    font-family:'JetBrains Mono',monospace;
+  }
+  .compare-wrap{
+    position:relative; max-width:100%; line-height:0;
+  }
+  .compare-wrap img, .compare-wrap canvas{
+    display:block; max-width:100%; height:auto;
+  }
+  .img-after{
+    position:absolute; top:0; left:0; width:100%; height:100%;
+    object-fit:contain; clip-path:inset(0 0 0 50%);
+  }
+  .divider{
+    position:absolute; top:0; bottom:0; left:50%;
+    width:2px; background:var(--paper); box-shadow:0 0 0 1px rgba(0,0,0,.4);
+    transform:translateX(-1px);
+    pointer-events:none;
+  }
+  .divider::after{
+    content:'⇔'; position:absolute; top:50%; left:50%;
+    transform:translate(-50%,-50%);
+    width:34px; height:34px; border-radius:50%;
+    background:var(--paper); color:var(--graphite-900);
+    display:flex; align-items:center; justify-content:center;
+    font-size:15px; box-shadow:0 2px 8px rgba(0,0,0,.4);
+  }
+  .tag-before,.tag-after{
+    position:absolute; top:10px; font-family:'JetBrains Mono',monospace;
+    font-size:10.5px; letter-spacing:.06em; padding:4px 9px; border-radius:5px;
+    background:rgba(20,23,26,0.72); pointer-events:none;
+  }
+  .tag-before{left:10px;}
+  .tag-after{right:10px; color:var(--cyan);}
+
+  .loupe{
+    position:absolute; width:150px; height:150px; border-radius:50%;
+    border:2px solid var(--cyan);
+    box-shadow:0 4px 18px rgba(0,0,0,.5), inset 0 0 0 1px rgba(0,0,0,.3);
+    pointer-events:none; overflow:hidden; display:none;
+    background:#000;
+  }
+  .loupe canvas{ image-rendering:pixelated; }
+  .loupe .lbl{
+    position:absolute; bottom:4px; left:0; right:0; text-align:center;
+    font-family:'JetBrains Mono',monospace; font-size:9px; color:var(--cyan);
+    background:rgba(0,0,0,.5); padding:2px 0;
+  }
+
+  .progress-overlay{
+    position:absolute; inset:0; background:rgba(20,23,26,0.85);
+    display:none; align-items:center; justify-content:center; flex-direction:column; gap:12px;
+    backdrop-filter:blur(2px);
+  }
+  .progress-overlay.show{display:flex;}
+  .spinner{
+    width:34px; height:34px; border-radius:50%;
+    border:3px solid var(--graphite-600); border-top-color:var(--ember);
+    animation:spin .8s linear infinite;
+  }
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .progress-overlay .txt{font-family:'JetBrains Mono',monospace; font-size:12.5px; color:var(--mist);}
+
+  .warn{
+    font-size:12px; color:#F5A623; background:rgba(245,166,35,0.08);
+    border:1px solid rgba(245,166,35,0.25); border-radius:8px; padding:9px 11px;
+    display:none; font-family:'JetBrains Mono',monospace; line-height:1.5;
+  }
+  .warn.show{display:block;}
+
+  .toast{
+    position:fixed; bottom:20px; left:50%; transform:translateX(-50%) translateY(20px);
+    background:var(--graphite-700); border:1px solid var(--cyan-dim); color:var(--paper);
+    padding:11px 18px; border-radius:9px; font-size:13px; font-family:'JetBrains Mono',monospace;
+    opacity:0; pointer-events:none; transition:all .25s; z-index:50;
+  }
+  .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+
+  .footer-note{
+    font-size:11.5px; color:var(--mist); text-align:center; margin-top:6px;
+    font-family:'JetBrains Mono',monospace;
+  }
+
+  .locked{
+    opacity:.42; filter:grayscale(.4); pointer-events:none;
+    transition:opacity .2s;
+    display:flex; flex-direction:column; gap:16px;
+  }
+  .locked.unlocked{ opacity:1; filter:none; pointer-events:auto; }
+
+  ::selection{background:var(--ember); color:#1a0d05;}
+
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo"><span class="dot">◆</span>Imagem<span style="color:var(--cyan)">HD</span></div>
+  <div class="tag">pensado pra gráfica: resolução de impressão, prova pro cliente e preparo pra laser — sem IA, roda no navegador</div>
+</header>
+
+<main>
+  <div class="controls panel">
+    <div>
+      <p class="section-label">01 · Imagem</p>
+      <div class="dropzone" id="dropzone">
+        <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#8B939B" stroke-width="1.6"><path d="M12 16V4M12 4l-4 4M12 4l4 4"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>
+        <div class="main-txt">Toque para escolher uma imagem</div>
+        <div class="sub-txt">ou arraste aqui — JPG, PNG, WEBP</div>
+        <input type="file" id="fileInput" accept="image/*">
+      </div>
+      <div class="warn" id="warnBox"></div>
+    </div>
+
+    <div class="locked" id="controlsLocked">
+    <div>
+      <p class="section-label">02 · Pra que é essa imagem?</p>
+      <div class="usecase-grid" id="usecaseGrid">
+        <div class="usecase-btn active" data-mode="livre">
+          <span class="ic">↕</span>
+          <span class="tx"><span class="t1">Ampliar livremente</span><span class="t2">escala simples, uso geral</span></span>
+        </div>
+        <div class="usecase-btn" data-mode="impressao">
+          <span class="ic">🖨</span>
+          <span class="tx"><span class="t1">Vai imprimir em tamanho físico</span><span class="t2">cartão, banner, pôster, adesivo…</span></span>
+        </div>
+        <div class="usecase-btn" data-mode="laser">
+          <span class="ic">✂</span>
+          <span class="tx"><span class="t1">Preparar p/ gravação a laser</span><span class="t2">converte pra P&B de alto contraste</span></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODO LIVRE -->
+    <div class="subpanel show" id="panel-livre">
+      <div>
+        <p class="section-label">Escala</p>
+        <div class="scale-grid">
+          <button class="scale-btn" data-scale="1.5">1.5×</button>
+          <button class="scale-btn active" data-scale="2">2×</button>
+          <button class="scale-btn" data-scale="3">3×</button>
+          <button class="scale-btn" data-scale="4">4×</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODO IMPRESSAO -->
+    <div class="subpanel" id="panel-impressao">
+      <div class="field">
+        <p class="section-label">Formato</p>
+        <select id="presetSelect">
+          <option value="cartao">Cartão de visita (9×5cm)</option>
+          <option value="adesivo">Adesivo (10×10cm)</option>
+          <option value="poster">Pôster / Quadro (30×40cm)</option>
+          <option value="banner">Banner / Faixa — visto de longe (100×70cm)</option>
+          <option value="painel">Painel / Fachada — visto de longe (200×100cm)</option>
+          <option value="caneca">Caneca / Produto (20×8cm)</option>
+          <option value="custom">Personalizado</option>
+        </select>
+      </div>
+      <div class="field">
+        <p class="section-label">Tamanho final e DPI</p>
+        <div class="cm-row">
+          <input class="cm-input" id="wCm" type="number" min="1" value="9" step="0.5">
+          <span class="x">×</span>
+          <input class="cm-input" id="hCm" type="number" min="1" value="5" step="0.5">
+          <span class="x">cm</span>
+        </div>
+        <div class="cm-row">
+          <select id="dpiSelect" style="flex:1;">
+            <option value="300">300 DPI — visto de perto (padrão foto/cartão)</option>
+            <option value="150">150 DPI — visto de 1-2m (banner)</option>
+            <option value="100">100 DPI — visto de longe (fachada/painel)</option>
+          </select>
+        </div>
+      </div>
+      <div class="verdict" id="verdictBox" style="display:none;"></div>
+    </div>
+
+    <!-- MODO LASER -->
+    <div class="subpanel" id="panel-laser">
+      <div>
+        <p class="section-label">Escala antes de converter</p>
+        <div class="scale-grid">
+          <button class="scale-btn laser-scale-btn" data-scale="1">1×</button>
+          <button class="scale-btn laser-scale-btn active" data-scale="2">2×</button>
+          <button class="scale-btn laser-scale-btn" data-scale="3">3×</button>
+          <button class="scale-btn laser-scale-btn" data-scale="4">4×</button>
+        </div>
+      </div>
+      <div class="field">
+        <div class="field-row"><label for="posterizeRange">Tons de cinza (posterizar)</label><span class="val" id="posterizeVal">4</span></div>
+        <input type="range" id="posterizeRange" min="2" max="8" value="4">
+      </div>
+      <div class="field">
+        <div class="field-row"><label for="contrastRange">Contraste</label><span class="val" id="contrastVal">40%</span></div>
+        <input type="range" id="contrastRange" min="0" max="100" value="40">
+      </div>
+      <div class="toggle-row">
+        <div><div class="lbl">Inverter (fundo preto)</div><div class="sub">útil pra gravação em relevo invertido</div></div>
+        <label class="switch"><input type="checkbox" id="invertToggle"><span class="track"></span></label>
+      </div>
+    </div>
+
+    <div>
+      <p class="section-label">03 · Ajustes gerais</p>
+      <div class="field" id="sharpField">
+        <div class="field-row"><label for="sharpRange">Nitidez</label><span class="val" id="sharpVal">55%</span></div>
+        <input type="range" id="sharpRange" min="0" max="100" value="55">
+      </div>
+    </div>
+
+    <div class="toggle-row">
+      <div>
+        <div class="lbl">Foto veio do WhatsApp / rede social</div>
+        <div class="sub">ativa limpeza extra de artefatos de compressão</div>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="whatsappToggle">
+        <span class="track"></span>
+      </label>
+    </div>
+
+    <div class="toggle-row">
+      <div>
+        <div class="lbl">Reduzir ruído antes de ampliar</div>
+        <div class="sub">grão de scan ou foto em ambiente escuro</div>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="denoiseToggle">
+        <span class="track"></span>
+      </label>
+    </div>
+
+    <button class="btn btn-primary" id="processBtn" disabled>Processar imagem</button>
+    </div>
+
+    <div id="resultActions" style="display:none; flex-direction:column; gap:8px;">
+      <button class="btn btn-secondary" id="downloadBtn">Baixar versão final (alta resolução)</button>
+      <button class="btn btn-ghost" id="proofBtn">Baixar prova com marca d'água (p/ aprovação do cliente)</button>
+    </div>
+
+    <div class="stats" id="statsBox" style="display:none;">
+      <div class="stat-box">
+        <div class="k">Original</div>
+        <div class="v" id="statOrig">—</div>
+      </div>
+      <div class="stat-box">
+        <div class="k">Ampliada</div>
+        <div class="v accent" id="statNew">—</div>
+      </div>
+    </div>
+    <div class="footer-note">Tudo é processado localmente no seu navegador — nenhuma imagem é enviada para servidor.</div>
+  </div>
+
+  <div class="preview-panel" id="previewPanel" style="display:none;">
+    <div class="panel" style="padding:0; overflow:hidden;">
+      <div class="stage empty" id="stage">
+        <div class="empty-msg">nenhuma imagem carregada ainda<br><span style="opacity:.6">o antes/depois aparece aqui — arraste o divisor para comparar</span></div>
+        <div class="progress-overlay" id="progressOverlay">
+          <div class="spinner"></div>
+          <div class="txt" id="progressTxt">processando…</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<div class="toast" id="toast">copiado!</div>
+
+<script src="https://cdn.jsdelivr.net/npm/heic2any/dist/heic2any.min.js"></script>
+<script>
+(function(){
+  // ---------- state ----------
+  let srcImg = null;
+  let srcCanvas = null;
+  let resultCanvas = null;
+  let currentScale = 2;
+  let laserScale = 2;
+  let mode = 'livre'; // livre | impressao | laser
+  const MAX_OUTPUT_PIXELS = 18_000_000;
+
+  const dropzone = document.getElementById('dropzone');
+  const fileInput = document.getElementById('fileInput');
+  const controlsLocked = document.getElementById('controlsLocked');
+  const previewPanel = document.getElementById('previewPanel');
+  const stage = document.getElementById('stage');
+  const progressOverlay = document.getElementById('progressOverlay');
+  const progressTxt = document.getElementById('progressTxt');
+  const processBtn = document.getElementById('processBtn');
+  const resultActions = document.getElementById('resultActions');
+  const downloadBtn = document.getElementById('downloadBtn');
+  const proofBtn = document.getElementById('proofBtn');
+  const statsBox = document.getElementById('statsBox');
+  const statOrig = document.getElementById('statOrig');
+  const statNew = document.getElementById('statNew');
+  const warnBox = document.getElementById('warnBox');
+  const sharpRange = document.getElementById('sharpRange');
+  const sharpVal = document.getElementById('sharpVal');
+  const sharpField = document.getElementById('sharpField');
+  const denoiseToggle = document.getElementById('denoiseToggle');
+  const whatsappToggle = document.getElementById('whatsappToggle');
+  const toast = document.getElementById('toast');
+
+  // print mode elements
+  const presetSelect = document.getElementById('presetSelect');
+  const wCm = document.getElementById('wCm');
+  const hCm = document.getElementById('hCm');
+  const dpiSelect = document.getElementById('dpiSelect');
+  const verdictBox = document.getElementById('verdictBox');
+
+  // laser mode elements
+  const posterizeRange = document.getElementById('posterizeRange');
+  const posterizeVal = document.getElementById('posterizeVal');
+  const contrastRange = document.getElementById('contrastRange');
+  const contrastVal = document.getElementById('contrastVal');
+  const invertToggle = document.getElementById('invertToggle');
+
+  const printPresets = {
+    cartao:   {w:9,   h:5,   dpi:300},
+    adesivo:  {w:10,  h:10,  dpi:300},
+    poster:   {w:30,  h:40,  dpi:300},
+    banner:   {w:100, h:70,  dpi:150},
+    painel:   {w:200, h:100, dpi:100},
+    caneca:   {w:20,  h:8,   dpi:300},
+    custom:   {w:20,  h:20,  dpi:300}
+  };
+
+  function showToast(msg){
+    toast.textContent = msg;
+    toast.classList.add('show');
+    setTimeout(()=> toast.classList.remove('show'), 1800);
+  }
+
+  // ---------- use-case switching ----------
+  document.querySelectorAll('.usecase-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.usecase-btn').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      mode = btn.dataset.mode;
+      document.querySelectorAll('.subpanel').forEach(p=>p.classList.remove('show'));
+      document.getElementById('panel-'+mode).classList.add('show');
+      sharpField.style.display = (mode === 'laser') ? 'none' : 'flex';
+      if(mode === 'impressao') updateVerdict();
+    });
+  });
+
+  document.querySelectorAll('.scale-btn:not(.laser-scale-btn)').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.scale-btn:not(.laser-scale-btn)').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      currentScale = parseFloat(btn.dataset.scale);
+      updateEstimate();
+    });
+  });
+  document.querySelectorAll('.laser-scale-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.laser-scale-btn').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      laserScale = parseFloat(btn.dataset.scale);
+      updateEstimate();
+    });
+  });
+
+  sharpRange.addEventListener('input', ()=>{ sharpVal.textContent = sharpRange.value + '%'; });
+  posterizeRange.addEventListener('input', ()=>{ posterizeVal.textContent = posterizeRange.value; });
+  contrastRange.addEventListener('input', ()=>{ contrastVal.textContent = contrastRange.value + '%'; });
+
+  presetSelect.addEventListener('change', ()=>{
+    const p = printPresets[presetSelect.value];
+    wCm.value = p.w; hCm.value = p.h; dpiSelect.value = p.dpi;
+    updateVerdict();
+  });
+  [wCm, hCm, dpiSelect].forEach(el=> el.addEventListener('input', updateVerdict));
+
+  // ---------- file loading ----------
+  dropzone.addEventListener('click', ()=> fileInput.click());
+  fileInput.addEventListener('change', e=>{
+    if(e.target.files[0]) loadFile(e.target.files[0]);
+  });
+  ['dragover','dragenter'].forEach(ev=>{
+    dropzone.addEventListener(ev, e=>{ e.preventDefault(); dropzone.classList.add('drag'); });
+  });
+  ['dragleave','drop'].forEach(ev=>{
+    dropzone.addEventListener(ev, e=>{ e.preventDefault(); dropzone.classList.remove('drag'); });
+  });
+  dropzone.addEventListener('drop', e=>{
+    const f = e.dataTransfer.files[0];
+    if(f) loadFile(f);
+  });
+
+  function isHeic(file){
+    const type = (file.type||'').toLowerCase();
+    const name = (file.name||'').toLowerCase();
+    return type.includes('heic') || type.includes('heif') || name.endsWith('.heic') || name.endsWith('.heif');
+  }
+
+  async function loadFile(file){
+    if(!file.type.startsWith('image/') && !isHeic(file)){
+      showWarn('Esse arquivo não parece ser uma imagem.');
+      return;
+    }
+    clearWarn();
+    let workingFile = file;
+    if(isHeic(file)){
+      dropzone.querySelector('.main-txt').textContent = 'Convertendo foto HEIC…';
+      try{
+        if(typeof heic2any === 'undefined') throw new Error('conversor indisponível');
+        const convertedBlob = await heic2any({blob:file, toType:'image/jpeg', quality:0.92});
+        workingFile = new File([convertedBlob], file.name.replace(/\.(heic|heif)$/i,'.jpg'), {type:'image/jpeg'});
+      }catch(err){
+        dropzone.querySelector('.main-txt').textContent = 'Toque para escolher uma imagem';
+        showWarn('Essa foto está em HEIC (padrão da câmera do iPhone) e não consegui converter automaticamente aqui. Tente abrir o arquivo .html direto pelo Safari do celular (fora do preview do app), ou exporte a foto como JPEG e envie de novo.');
+        return;
+      }
+      dropzone.querySelector('.main-txt').textContent = 'Toque para escolher uma imagem';
+    }
+    const url = URL.createObjectURL(workingFile);
+    const img = new Image();
+    img.onload = ()=>{
+      srcImg = img;
+      srcCanvas = document.createElement('canvas');
+      srcCanvas.width = img.naturalWidth;
+      srcCanvas.height = img.naturalHeight;
+      srcCanvas.getContext('2d').drawImage(img,0,0);
+      resultCanvas = null;
+      resultActions.style.display = 'none';
+      processBtn.disabled = false;
+      controlsLocked.classList.add('unlocked');
+      updateEstimate();
+      if(mode==='impressao') updateVerdict();
+      URL.revokeObjectURL(url);
+    };
+    img.onerror = ()=> showWarn('Não consegui abrir essa imagem. Tente outro arquivo.');
+    img.src = url;
+  }
+
+  function showWarn(msg){
+    warnBox.textContent = '⚠ ' + msg;
+    warnBox.classList.add('show');
+  }
+  function clearWarn(){ warnBox.classList.remove('show'); }
+
+  function updateEstimate(){
+    if(!srcCanvas) return;
+    clearWarn();
+    const scale = mode === 'laser' ? laserScale : currentScale;
+    let outW = Math.round(srcCanvas.width * scale);
+    let outH = Math.round(srcCanvas.height * scale);
+    if(outW*outH > MAX_OUTPUT_PIXELS){
+      showWarn('Essa combinação geraria uma imagem muito grande pro navegador processar — vou limitar a resolução final automaticamente.');
+    }
+    statsBox.style.display = 'grid';
+    statOrig.textContent = srcCanvas.width + ' × ' + srcCanvas.height;
+    statNew.textContent = '≈ ' + outW + ' × ' + outH;
+  }
+
+  // ---------- print verdict ----------
+  let lastVerdictTier = null;
+  let lastVerdictScale = 1;
+  function updateVerdict(){
+    if(!srcCanvas){ verdictBox.style.display='none'; return; }
+    const w = parseFloat(wCm.value)||1;
+    const h = parseFloat(hCm.value)||1;
+    const dpi = parseFloat(dpiSelect.value)||300;
+    const reqW = (w/2.54)*dpi;
+    const reqH = (h/2.54)*dpi;
+    const scaleW = reqW/srcCanvas.width;
+    const scaleH = reqH/srcCanvas.height;
+    const neededScale = Math.max(scaleW, scaleH, 1);
+    lastVerdictScale = Math.min(neededScale, 6);
+
+    const srcAspect = srcCanvas.width/srcCanvas.height;
+    const tgtAspect = w/h;
+    const aspectMismatch = Math.abs(srcAspect-tgtAspect)/tgtAspect > 0.08;
+
+    let tier, headTxt, desc, msg;
+    const sizeTxt = w + '×' + h + 'cm';
+    if(neededScale <= 1.15){
+      tier='ok'; headTxt='Ótima qualidade';
+      desc='A imagem original já tem resolução suficiente pra esse tamanho, praticamente sem precisar ampliar.';
+      msg = 'Oi! Sua foto está em ótima qualidade pra imprimir em ' + sizeTxt + ' 🙌 Já vou preparar aqui!';
+    } else if(neededScale <= 2.2){
+      tier='ok'; headTxt='Boa qualidade após ampliação';
+      desc='Precisa ampliar cerca de ' + neededScale.toFixed(1) + '×, mas o resultado deve ficar nítido.';
+      msg = 'Oi! Consigo imprimir sua foto em ' + sizeTxt + ' com boa qualidade 👍 Vou ampliar um pouco aqui e já preparo pra impressão.';
+    } else if(neededScale <= 3.5){
+      tier='mid'; headTxt='Aceitável — pode perder um pouco de nitidez';
+      desc='Precisa ampliar cerca de ' + neededScale.toFixed(1) + '×. Fica bom pra ver de uma certa distância, mas de perto pode notar leve suavização.';
+      msg = 'Oi! Consigo imprimir sua foto em ' + sizeTxt + ', mas como a imagem original é um pouco pequena pra esse tamanho, pode perder um pouquinho de nitidez de perto. Ainda fica com qualidade boa. Quer que eu prepare assim mesmo?';
+    } else {
+      tier='bad'; headTxt='Resolução baixa pro tamanho pedido';
+      desc='Precisaria ampliar cerca de ' + neededScale.toFixed(1) + '×. Consigo imprimir, mas o resultado deve ficar visivelmente mais suave de perto.';
+      msg = 'Oi! Analisando sua foto aqui — pra imprimir em ' + sizeTxt + ' com boa nitidez, o ideal seria uma versão maior da imagem (de preferência sem ter passado pelo WhatsApp, que comprime bastante). Posso imprimir do jeito que está, mas pode ficar mais "suave" de perto. Você tem uma versão maior, ou posso seguir assim mesmo?';
+    }
+    lastVerdictTier = tier;
+
+    let html = '<div class="head"><span class="dot"></span>' + headTxt + '</div>';
+    html += '<div class="desc">' + desc + '</div>';
+    if(aspectMismatch){
+      html += '<div class="desc">⚠ A proporção da foto não bate exatamente com ' + sizeTxt + ' — pode ser necessário cortar um pouco pra preencher o formato.</div>';
+    }
+    html += '<div class="msgbox" id="verdictMsg">' + msg + '</div>';
+    html += '<button class="btn btn-ghost" id="copyMsgBtn" type="button">Copiar mensagem pro cliente</button>';
+    verdictBox.className = 'verdict ' + tier;
+    verdictBox.style.display = 'flex';
+    verdictBox.innerHTML = html;
+    document.getElementById('copyMsgBtn').addEventListener('click', ()=>{
+      const text = document.getElementById('verdictMsg').textContent;
+      copyToClipboard(text);
+    });
+  }
+
+  function copyToClipboard(text){
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(()=> showToast('mensagem copiada — cole no WhatsApp'));
+    } else {
+      const ta = document.createElement('textarea');
+      ta.value = text; document.body.appendChild(ta); ta.select();
+      try{ document.execCommand('copy'); showToast('mensagem copiada'); }catch(e){}
+      document.body.removeChild(ta);
+    }
+  }
+
+  function renderInitialPreview(){
+    stage.classList.remove('empty');
+    stage.innerHTML = '';
+    stage.appendChild(progressOverlay);
+    const wrap = document.createElement('div');
+    wrap.className = 'compare-wrap';
+    wrap.id = 'compareWrap';
+    const before = document.createElement('img');
+    before.src = srcCanvas.toDataURL();
+    before.className = 'img-before';
+    wrap.appendChild(before);
+    stage.appendChild(wrap);
+  }
+
+  // ---------- core: Lanczos resample (separable) ----------
+  function lanczos(x, a){
+    if(x === 0) return 1;
+    if(x <= -a || x >= a) return 0;
+    const px = Math.PI * x;
+    return (a * Math.sin(px) * Math.sin(px/a)) / (px*px);
+  }
+
+  function computeAxisWeights(srcSize, dstSize, a){
+    const scale = dstSize / srcSize;
+    const filterScale = scale < 1 ? 1/scale : 1;
+    const support = a * filterScale;
+    const out = new Array(dstSize);
+    for(let i=0;i<dstSize;i++){
+      const center = (i+0.5)/scale - 0.5;
+      let start = Math.floor(center - support);
+      let end = Math.ceil(center + support);
+      const wts = [];
+      let sum = 0;
+      for(let j=start;j<=end;j++){
+        const w = lanczos((center - j)/filterScale, a);
+        wts.push(w);
+        sum += w;
+      }
+      if(sum === 0) sum = 1;
+      for(let k=0;k<wts.length;k++) wts[k] /= sum;
+      out[i] = {start, wts};
+    }
+    return out;
+  }
+
+  function resizeLanczos(srcData, srcW, srcH, dstW, dstH, a){
+    const wX = computeAxisWeights(srcW, dstW, a);
+    const wY = computeAxisWeights(srcH, dstH, a);
+
+    const mid = new Float32Array(dstW*srcH*4);
+    for(let y=0; y<srcH; y++){
+      const rowOff = y*srcW*4;
+      for(let x=0; x<dstW; x++){
+        const {start, wts} = wX[x];
+        let r=0,g=0,b=0,al=0;
+        for(let k=0;k<wts.length;k++){
+          let sx = start+k;
+          if(sx<0) sx=0; else if(sx>=srcW) sx=srcW-1;
+          const idx = rowOff + sx*4;
+          const w = wts[k];
+          r += srcData[idx]*w;
+          g += srcData[idx+1]*w;
+          b += srcData[idx+2]*w;
+          al += srcData[idx+3]*w;
+        }
+        const outIdx = (y*dstW+x)*4;
+        mid[outIdx]=r; mid[outIdx+1]=g; mid[outIdx+2]=b; mid[outIdx+3]=al;
+      }
+    }
+
+    const out = new Uint8ClampedArray(dstW*dstH*4);
+    for(let x=0; x<dstW; x++){
+      for(let y=0; y<dstH; y++){
+        const {start, wts} = wY[y];
+        let r=0,g=0,b=0,al=0;
+        for(let k=0;k<wts.length;k++){
+          let sy = start+k;
+          if(sy<0) sy=0; else if(sy>=srcH) sy=srcH-1;
+          const idx = (sy*dstW+x)*4;
+          const w = wts[k];
+          r += mid[idx]*w;
+          g += mid[idx+1]*w;
+          b += mid[idx+2]*w;
+          al += mid[idx+3]*w;
+        }
+        const outIdx = (y*dstW+x)*4;
+        out[outIdx]=r; out[outIdx+1]=g; out[outIdx+2]=b; out[outIdx+3]=al;
+      }
+    }
+    return out;
+  }
+
+  function boxBlurPass(data, w, h, radius){
+    if(radius<=0) return data;
+    const tmp = new Float32Array(data.length);
+    const norm = 1/(radius*2+1);
+    for(let y=0;y<h;y++){
+      const rowOff = y*w*4;
+      for(let c=0;c<4;c++){
+        let acc=0;
+        for(let k=-radius;k<=radius;k++){
+          let xx = Math.min(w-1, Math.max(0,k));
+          acc += data[rowOff + xx*4 + c];
+        }
+        tmp[rowOff + c] = acc*norm;
+        for(let x=1;x<w;x++){
+          const addX = Math.min(w-1, x+radius);
+          const remX = Math.max(0, x-radius-1);
+          acc += data[rowOff + addX*4 + c] - data[rowOff + remX*4 + c];
+          tmp[rowOff + x*4 + c] = acc*norm;
+        }
+      }
+    }
+    const out = new Float32Array(data.length);
+    for(let x=0;x<w;x++){
+      for(let c=0;c<4;c++){
+        let acc=0;
+        for(let k=-radius;k<=radius;k++){
+          let yy = Math.min(h-1, Math.max(0,k));
+          acc += tmp[yy*w*4 + x*4 + c];
+        }
+        out[x*4+c] = acc*norm;
+        for(let y=1;y<h;y++){
+          const addY = Math.min(h-1, y+radius);
+          const remY = Math.max(0, y-radius-1);
+          acc += tmp[addY*w*4+x*4+c] - tmp[remY*w*4+x*4+c];
+          out[y*w*4+x*4+c] = acc*norm;
+        }
+      }
+    }
+    return out;
+  }
+
+  function unsharpMask(data, w, h, amount){
+    if(amount<=0) return data;
+    const blurred = boxBlurPass(Float32Array.from(data), w, h, 1);
+    const out = new Uint8ClampedArray(data.length);
+    for(let i=0;i<data.length;i+=4){
+      out[i]   = data[i]   + (data[i]   - blurred[i])   * amount;
+      out[i+1] = data[i+1] + (data[i+1] - blurred[i+1]) * amount;
+      out[i+2] = data[i+2] + (data[i+2] - blurred[i+2]) * amount;
+      out[i+3] = data[i+3];
+    }
+    return out;
+  }
+
+  function denoiseData(data, w, h, strength){
+    const radius = strength > 0.6 ? 2 : 1;
+    const blend = 0.25 + strength*0.35;
+    const blurred = boxBlurPass(Float32Array.from(data), w, h, radius);
+    const out = new Uint8ClampedArray(data.length);
+    for(let i=0;i<data.length;i++){
+      out[i] = data[i]*(1-blend) + blurred[i]*blend;
+    }
+    return out;
+  }
+
+  function grayscaleContrastPosterize(data, w, h, levels, contrastPct, invert){
+    const out = new Uint8ClampedArray(data.length);
+    const contrast = contrastPct/100 * 1.3; // 0..1.3
+    const factor = (259*(contrast*255+255)) / (255*(259-contrast*255));
+    const step = 255/(levels-1);
+    for(let i=0;i<data.length;i+=4){
+      let gray = 0.299*data[i] + 0.587*data[i+1] + 0.114*data[i+2];
+      gray = factor*(gray-128)+128;
+      gray = Math.max(0, Math.min(255, gray));
+      let q = Math.round(gray/step)*step;
+      q = Math.max(0, Math.min(255, q));
+      if(invert) q = 255-q;
+      out[i]=q; out[i+1]=q; out[i+2]=q; out[i+3]=data[i+3];
+    }
+    return out;
+  }
+
+  // ---------- process pipeline ----------
+  processBtn.addEventListener('click', ()=>{
+    if(!srcCanvas) return;
+    previewPanel.style.display = 'flex';
+    renderInitialPreview();
+    progressOverlay.classList.add('show');
+    processBtn.disabled = true;
+    progressTxt.textContent = 'preparando…';
+    setTimeout(runProcess, 40);
+  });
+
+  function runProcess(){
+    try{
+      const ctx = srcCanvas.getContext('2d');
+      let srcData = ctx.getImageData(0,0,srcCanvas.width, srcCanvas.height).data;
+      let srcW = srcCanvas.width, srcH = srcCanvas.height;
+
+      const wantDenoise = denoiseToggle.checked || whatsappToggle.checked;
+      if(wantDenoise){
+        progressTxt.textContent = 'limpando artefatos / ruído…';
+        const strength = whatsappToggle.checked ? 0.85 : 0.4;
+        srcData = denoiseData(srcData, srcW, srcH, strength);
+      }
+
+      let scale;
+      if(mode === 'impressao') scale = lastVerdictScale || 1;
+      else if(mode === 'laser') scale = laserScale;
+      else scale = currentScale;
+
+      let outW = Math.round(srcW * scale);
+      let outH = Math.round(srcH * scale);
+      if(outW*outH > MAX_OUTPUT_PIXELS){
+        const factor = Math.sqrt(MAX_OUTPUT_PIXELS/(outW*outH));
+        outW = Math.round(outW*factor);
+        outH = Math.round(outH*factor);
+      }
+
+      progressTxt.textContent = 'ampliando (Lanczos)…';
+      let resized = resizeLanczos(srcData, srcW, srcH, outW, outH, 3);
+
+      if(mode === 'laser'){
+        progressTxt.textContent = 'convertendo pra P&B alto contraste…';
+        const levels = parseInt(posterizeRange.value,10);
+        const contrastPct = parseInt(contrastRange.value,10);
+        resized = grayscaleContrastPosterize(resized, outW, outH, levels, contrastPct, invertToggle.checked);
+      } else {
+        const sharpAmount = (parseInt(sharpRange.value,10)/100) * 1.4;
+        if(sharpAmount>0){
+          progressTxt.textContent = 'aplicando nitidez…';
+          resized = unsharpMask(resized, outW, outH, sharpAmount);
+        }
+      }
+
+      resultCanvas = document.createElement('canvas');
+      resultCanvas.width = outW; resultCanvas.height = outH;
+      const rctx = resultCanvas.getContext('2d');
+      rctx.putImageData(new ImageData(resized, outW, outH), 0, 0);
+
+      statNew.textContent = outW + ' × ' + outH;
+      showCompare();
+      resultActions.style.display = 'flex';
+    }catch(err){
+      console.error(err);
+      showWarn('Algo deu errado ao processar essa imagem: ' + err.message);
+    }finally{
+      progressOverlay.classList.remove('show');
+      processBtn.disabled = false;
+    }
+  }
+
+  // ---------- before/after compare UI ----------
+  let dividerPct = 50;
+  function showCompare(){
+    stage.classList.remove('empty');
+    const wrap = document.getElementById('compareWrap');
+    wrap.querySelectorAll('.img-after,.divider,.tag-before,.tag-after,.loupe').forEach(n=>n.remove());
+
+    const after = document.createElement('img');
+    after.src = resultCanvas.toDataURL('image/png');
+    after.className = 'img-after';
+    after.id = 'afterImg';
+    wrap.appendChild(after);
+
+    const div = document.createElement('div');
+    div.className = 'divider'; div.id = 'divider';
+    wrap.appendChild(div);
+
+    const tb = document.createElement('div'); tb.className='tag-before'; tb.textContent='ANTES'; wrap.appendChild(tb);
+    const ta = document.createElement('div'); ta.className='tag-after';
+    ta.textContent='DEPOIS' + (mode==='laser' ? ' · laser' : '');
+    wrap.appendChild(ta);
+
+    const loupe = document.createElement('div');
+    loupe.className = 'loupe'; loupe.id = 'loupe';
+    const loupeCanvas = document.createElement('canvas');
+    loupeCanvas.width = 150; loupeCanvas.height = 150;
+    loupe.appendChild(loupeCanvas);
+    const lbl = document.createElement('div'); lbl.className='lbl'; lbl.textContent='zoom 4× · pixels reais';
+    loupe.appendChild(lbl);
+    wrap.appendChild(loupe);
+
+    setDivider(50);
+    wireCompareEvents(wrap, loupeCanvas);
+  }
+
+  function setDivider(pct){
+    dividerPct = Math.max(2, Math.min(98, pct));
+    const after = document.getElementById('afterImg');
+    const div = document.getElementById('divider');
+    if(after) after.style.clipPath = `inset(0 0 0 ${dividerPct}%)`;
+    if(div) div.style.left = dividerPct + '%';
+  }
+
+  function wireCompareEvents(wrap, loupeCanvas){
+    let dragging = false;
+    const onMove = (clientX, clientY, rect)=>{
+      const pct = ((clientX-rect.left)/rect.width)*100;
+      if(dragging) setDivider(pct);
+      updateLoupe(clientX, clientY, rect);
+    };
+    const updateLoupe = (clientX, clientY, rect)=>{
+      const loupe = document.getElementById('loupe');
+      if(!resultCanvas) return;
+      const relX = (clientX-rect.left)/rect.width;
+      const relY = (clientY-rect.top)/rect.height;
+      if(relX<0||relX>1||relY<0||relY>1){ loupe.style.display='none'; return; }
+      loupe.style.display='block';
+      loupe.style.left = (clientX-rect.left-75)+'px';
+      loupe.style.top = (clientY-rect.top-75)+'px';
+      const lctx = loupeCanvas.getContext('2d');
+      lctx.imageSmoothingEnabled = false;
+      const srcX = relX*resultCanvas.width;
+      const srcY = relY*resultCanvas.height;
+      const zoomSrc = 150/4;
+      lctx.clearRect(0,0,150,150);
+      lctx.drawImage(resultCanvas,
+        srcX-zoomSrc/2, srcY-zoomSrc/2, zoomSrc, zoomSrc,
+        0,0,150,150);
+    };
+
+    wrap.addEventListener('mousedown', e=>{ dragging=true; const r=wrap.getBoundingClientRect(); onMove(e.clientX,e.clientY,r); });
+    window.addEventListener('mouseup', ()=> dragging=false);
+    wrap.addEventListener('mousemove', e=>{ const r=wrap.getBoundingClientRect(); onMove(e.clientX,e.clientY,r); });
+    wrap.addEventListener('mouseleave', ()=>{ const loupe=document.getElementById('loupe'); if(loupe) loupe.style.display='none'; });
+
+    wrap.addEventListener('touchstart', e=>{ dragging=true; const t=e.touches[0]; const r=wrap.getBoundingClientRect(); onMove(t.clientX,t.clientY,r); }, {passive:true});
+    wrap.addEventListener('touchmove', e=>{ const t=e.touches[0]; const r=wrap.getBoundingClientRect(); onMove(t.clientX,t.clientY,r); }, {passive:true});
+    wrap.addEventListener('touchend', ()=> dragging=false);
+  }
+
+  // ---------- downloads ----------
+  downloadBtn.addEventListener('click', ()=>{
+    if(!resultCanvas) return;
+    const link = document.createElement('a');
+    link.download = 'imagemhd-final-' + resultCanvas.width + 'x' + resultCanvas.height + '.png';
+    link.href = resultCanvas.toDataURL('image/png');
+    link.click();
+  });
+
+  proofBtn.addEventListener('click', ()=>{
+    if(!resultCanvas) return;
+    const maxSide = 1100;
+    const ratio = Math.min(1, maxSide/Math.max(resultCanvas.width, resultCanvas.height));
+    const pw = Math.round(resultCanvas.width*ratio);
+    const ph = Math.round(resultCanvas.height*ratio);
+    const pc = document.createElement('canvas');
+    pc.width = pw; pc.height = ph;
+    const pctx = pc.getContext('2d');
+    pctx.drawImage(resultCanvas, 0,0,pw,ph);
+
+    pctx.save();
+    pctx.globalAlpha = 0.22;
+    pctx.fillStyle = '#ffffff';
+    pctx.font = 'bold ' + Math.round(pw*0.045) + 'px Inter, sans-serif';
+    pctx.textAlign='center';
+    const label = 'PROVA \u2022 JOHEN ARTE GR\u00C1FICA';
+    const step = pw*0.42;
+    pctx.translate(pw/2, ph/2);
+    pctx.rotate(-Math.PI/8);
+    for(let y=-ph; y<ph*2; y+=step*0.55){
+      for(let x=-pw; x<pw*2; x+=step){
+        pctx.fillText(label, x-pw/2, y-ph/2);
+      }
+    }
+    pctx.restore();
+
+    const link = document.createElement('a');
+    link.download = 'imagemhd-prova-' + pw + 'x' + ph + '.jpg';
+    link.href = pc.toDataURL('image/jpeg', 0.85);
+    link.click();
+  });
+
+})();
+</script>
+</body>
+</html>
