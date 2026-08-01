@@ -374,6 +374,26 @@
   }
   .locked.unlocked{ opacity:1; filter:none; pointer-events:auto; }
 
+  .crop-wrap{
+    position:relative; width:100%; border-radius:10px; overflow:hidden;
+    background:
+      linear-gradient(45deg, #20242a 25%, transparent 25%),
+      linear-gradient(-45deg, #20242a 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, #20242a 75%),
+      linear-gradient(-45deg, transparent 75%, #20242a 75%);
+    background-size:16px 16px;
+    background-position:0 0, 0 8px, 8px -8px, -8px 0px;
+    background-color:#16191c;
+    border:1px solid var(--graphite-600);
+  }
+  .crop-wrap canvas{ display:block; width:100%; height:auto; cursor:grab; touch-action:none; }
+  .crop-wrap.grabbing canvas{ cursor:grabbing; }
+  .crop-hint{
+    position:absolute; bottom:6px; left:50%; transform:translateX(-50%);
+    font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--mist);
+    background:rgba(20,23,26,0.7); padding:3px 8px; border-radius:6px; pointer-events:none;
+  }
+
   ::selection{background:var(--ember); color:#1a0d05;}
 
 </style>
@@ -458,6 +478,21 @@
             <option value="150">150 DPI — visto de 1-2m (banner)</option>
             <option value="100">100 DPI — visto de longe (fachada/painel)</option>
           </select>
+        </div>
+      </div>
+      <div class="field">
+        <p class="section-label">Enquadramento</p>
+        <div class="scale-grid" style="grid-template-columns:1fr 1fr;">
+          <button class="scale-btn fit-mode-btn" data-fit="contain">Mostrar tudo</button>
+          <button class="scale-btn fit-mode-btn active" data-fit="cover">Preencher e cortar</button>
+        </div>
+        <div class="crop-wrap" id="cropWrap">
+          <canvas id="cropCanvas" width="320" height="320"></canvas>
+          <div class="crop-hint" id="cropHint">arraste pra reposicionar</div>
+        </div>
+        <div class="field" id="zoomField" style="margin-top:2px;">
+          <div class="field-row"><label for="zoomRange">Zoom</label><span class="val" id="zoomVal">100%</span></div>
+          <input type="range" id="zoomRange" min="100" max="300" value="100">
         </div>
       </div>
       <div class="verdict" id="verdictBox" style="display:none;"></div>
@@ -595,6 +630,16 @@
   const hCm = document.getElementById('hCm');
   const dpiSelect = document.getElementById('dpiSelect');
   const verdictBox = document.getElementById('verdictBox');
+  const cropWrap = document.getElementById('cropWrap');
+  const cropCanvas = document.getElementById('cropCanvas');
+  const zoomField = document.getElementById('zoomField');
+  const zoomRange = document.getElementById('zoomRange');
+  const zoomVal = document.getElementById('zoomVal');
+
+  let fitMode = 'cover'; // contain | cover
+  let cropZoom = 1;
+  let cropPanX = 0; // -1..1
+  let cropPanY = 0; // -1..1
 
   // laser mode elements
   const posterizeRange = document.getElementById('posterizeRange');
@@ -628,13 +673,17 @@
       document.querySelectorAll('.subpanel').forEach(p=>p.classList.remove('show'));
       document.getElementById('panel-'+mode).classList.add('show');
       sharpField.style.display = (mode === 'laser') ? 'none' : 'flex';
-      if(mode === 'impressao') updateVerdict();
+      if(srcCanvas){
+        if(mode === 'laser'){ fastPosterizePreview(); }
+        else { renderInitialPreview(); }
+      }
+      if(mode === 'impressao'){ resizeCropCanvasElement(); renderCropPreview(); updateVerdict(); }
     });
   });
 
-  document.querySelectorAll('.scale-btn:not(.laser-scale-btn)').forEach(btn=>{
+  document.querySelectorAll('.scale-btn:not(.laser-scale-btn):not(.fit-mode-btn)').forEach(btn=>{
     btn.addEventListener('click', ()=>{
-      document.querySelectorAll('.scale-btn:not(.laser-scale-btn)').forEach(b=>b.classList.remove('active'));
+      document.querySelectorAll('.scale-btn:not(.laser-scale-btn):not(.fit-mode-btn)').forEach(b=>b.classList.remove('active'));
       btn.classList.add('active');
       currentScale = parseFloat(btn.dataset.scale);
       updateEstimate();
@@ -649,16 +698,82 @@
     });
   });
 
+  document.querySelectorAll('.fit-mode-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.fit-mode-btn').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      fitMode = btn.dataset.fit;
+      zoomField.style.display = (fitMode === 'cover') ? 'flex' : 'none';
+      document.getElementById('cropHint').style.display = (fitMode === 'cover') ? 'block' : 'none';
+      cropZoom = 1; cropPanX = 0; cropPanY = 0;
+      zoomRange.value = 100; zoomVal.textContent = '100%';
+      renderCropPreview();
+      updateVerdict();
+    });
+  });
+
+  zoomRange.addEventListener('input', ()=>{
+    cropZoom = parseInt(zoomRange.value,10)/100;
+    zoomVal.textContent = zoomRange.value + '%';
+    cropPanX = Math.max(-1, Math.min(1, cropPanX));
+    cropPanY = Math.max(-1, Math.min(1, cropPanY));
+    renderCropPreview();
+    updateVerdict();
+  });
+
+  (function wireCropDrag(){
+    let dragging = false, startX=0, startY=0, startPanX=0, startPanY=0;
+    cropCanvas.addEventListener('pointerdown', e=>{
+      if(fitMode !== 'cover' || !srcCanvas) return;
+      dragging = true; startX = e.clientX; startY = e.clientY;
+      startPanX = cropPanX; startPanY = cropPanY;
+      cropWrap.classList.add('grabbing');
+      cropCanvas.setPointerCapture(e.pointerId);
+    });
+    cropCanvas.addEventListener('pointermove', e=>{
+      if(!dragging || !srcCanvas) return;
+      const r = getCropRect();
+      if(!r) return;
+      const pxToSrc = r.sw / cropCanvas.getBoundingClientRect().width;
+      const w = parseFloat(wCm.value)||1, h = parseFloat(hCm.value)||1;
+      const targetAspect = w/h;
+      const srcW = srcCanvas.width, srcH = srcCanvas.height;
+      const srcAspect = srcW/srcH;
+      let baseW, baseH;
+      if(srcAspect > targetAspect){ baseH = srcH; baseW = srcH*targetAspect; }
+      else { baseW = srcW; baseH = srcW/targetAspect; }
+      const cw = baseW/cropZoom, ch = baseH/cropZoom;
+      const slackX = Math.max(1,(srcW-cw)/2), slackY = Math.max(1,(srcH-ch)/2);
+      const dxSrc = (e.clientX-startX) * pxToSrc;
+      const dySrc = (e.clientY-startY) * (r.sh/cropCanvas.getBoundingClientRect().height);
+      cropPanX = Math.max(-1, Math.min(1, startPanX - dxSrc/slackX));
+      cropPanY = Math.max(-1, Math.min(1, startPanY - dySrc/slackY));
+      renderCropPreview();
+    });
+    const endDrag = ()=>{ if(dragging){ dragging=false; cropWrap.classList.remove('grabbing'); updateVerdict(); } };
+    cropCanvas.addEventListener('pointerup', endDrag);
+    cropCanvas.addEventListener('pointercancel', endDrag);
+  })();
+
   sharpRange.addEventListener('input', ()=>{ sharpVal.textContent = sharpRange.value + '%'; });
-  posterizeRange.addEventListener('input', ()=>{ posterizeVal.textContent = posterizeRange.value; });
-  contrastRange.addEventListener('input', ()=>{ contrastVal.textContent = contrastRange.value + '%'; });
+  posterizeRange.addEventListener('input', ()=>{ posterizeVal.textContent = posterizeRange.value; fastPosterizePreview(); });
+  contrastRange.addEventListener('input', ()=>{ contrastVal.textContent = contrastRange.value + '%'; fastPosterizePreview(); });
+  invertToggle.addEventListener('change', fastPosterizePreview);
 
   presetSelect.addEventListener('change', ()=>{
     const p = printPresets[presetSelect.value];
     wCm.value = p.w; hCm.value = p.h; dpiSelect.value = p.dpi;
+    cropZoom = 1; cropPanX = 0; cropPanY = 0;
+    zoomRange.value = 100; zoomVal.textContent = '100%';
+    resizeCropCanvasElement();
+    renderCropPreview();
     updateVerdict();
   });
-  [wCm, hCm, dpiSelect].forEach(el=> el.addEventListener('input', updateVerdict));
+  [wCm, hCm, dpiSelect].forEach(el=> el.addEventListener('input', ()=>{
+    resizeCropCanvasElement();
+    renderCropPreview();
+    updateVerdict();
+  }));
 
   // ---------- file loading ----------
   dropzone.addEventListener('click', ()=> fileInput.click());
@@ -714,10 +829,16 @@
       resultActions.style.display = 'none';
       processBtn.disabled = false;
       controlsLocked.classList.add('unlocked');
-      previewPanel.style.display = 'flex';
-      renderInitialPreview();
+      cropZoom = 1; cropPanX = 0; cropPanY = 0;
+      zoomRange.value = 100; zoomVal.textContent = '100%';
+      if(mode === 'laser'){
+        fastPosterizePreview();
+      } else {
+        previewPanel.style.display = 'flex';
+        renderInitialPreview();
+      }
       updateEstimate();
-      if(mode==='impressao') updateVerdict();
+      if(mode==='impressao'){ resizeCropCanvasElement(); renderCropPreview(); updateVerdict(); }
       URL.revokeObjectURL(url);
     };
     img.onerror = ()=> showWarn('Não consegui abrir essa imagem. Tente outro arquivo.');
@@ -754,9 +875,21 @@
     const dpi = parseFloat(dpiSelect.value)||300;
     const reqW = (w/2.54)*dpi;
     const reqH = (h/2.54)*dpi;
-    const scaleW = reqW/srcCanvas.width;
-    const scaleH = reqH/srcCanvas.height;
-    const neededScale = Math.max(scaleW, scaleH, 1);
+
+    let effW, effH;
+    if(fitMode === 'cover'){
+      const r = getCropRect();
+      effW = r ? r.sw : srcCanvas.width;
+      effH = r ? r.sh : srcCanvas.height;
+    } else {
+      effW = srcCanvas.width;
+      effH = srcCanvas.height;
+    }
+    const scaleW = reqW/effW;
+    const scaleH = reqH/effH;
+    const neededScale = fitMode==='contain'
+      ? Math.max(Math.min(scaleW, scaleH), 1)
+      : Math.max(scaleW, scaleH, 1);
     lastVerdictScale = Math.min(neededScale, 6);
 
     const srcAspect = srcCanvas.width/srcCanvas.height;
@@ -786,8 +919,10 @@
 
     let html = '<div class="head"><span class="dot"></span>' + headTxt + '</div>';
     html += '<div class="desc">' + desc + '</div>';
-    if(aspectMismatch){
-      html += '<div class="desc">⚠ A proporção da foto não bate exatamente com ' + sizeTxt + ' — pode ser necessário cortar um pouco pra preencher o formato.</div>';
+    if(aspectMismatch && fitMode==='contain'){
+      html += '<div class="desc">⚠ A proporção da foto não bate com ' + sizeTxt + ' — no modo "Mostrar tudo" vão sobrar bordas brancas dos lados. Se preferir preencher sem borda, use "Preencher e cortar".</div>';
+    } else if(aspectMismatch && fitMode==='cover'){
+      html += '<div class="desc">✂ A proporção não bate exatamente com ' + sizeTxt + ' — algumas partes das bordas serão cortadas pra preencher o formato. Ajuste o quadro ao lado se quiser escolher o que fica de fora.</div>';
     }
     html += '<div class="msgbox" id="verdictMsg">' + msg + '</div>';
     html += '<button class="btn btn-ghost" id="copyMsgBtn" type="button">Copiar mensagem pro cliente</button>';
@@ -798,6 +933,90 @@
       const text = document.getElementById('verdictMsg').textContent;
       copyToClipboard(text);
     });
+  }
+
+  // ---------- crop / fit tool (print mode) ----------
+  function resizeCropCanvasElement(){
+    const w = parseFloat(wCm.value)||1, h = parseFloat(hCm.value)||1;
+    const targetAspect = w/h;
+    const boxW = 320;
+    const boxH = Math.round(boxW/targetAspect);
+    cropCanvas.width = boxW;
+    cropCanvas.height = Math.max(60, Math.min(560, boxH));
+  }
+
+  function getCropRect(){
+    if(!srcCanvas) return null;
+    const w = parseFloat(wCm.value)||1, h = parseFloat(hCm.value)||1;
+    const targetAspect = w/h;
+    const srcW = srcCanvas.width, srcH = srcCanvas.height;
+    const srcAspect = srcW/srcH;
+    let baseW, baseH;
+    if(srcAspect > targetAspect){ baseH = srcH; baseW = srcH*targetAspect; }
+    else { baseW = srcW; baseH = srcW/targetAspect; }
+    const cw = baseW/cropZoom, ch = baseH/cropZoom;
+    const slackX = Math.max(0,(srcW-cw)/2), slackY = Math.max(0,(srcH-ch)/2);
+    const cx = srcW/2 + cropPanX*slackX;
+    const cy = srcH/2 + cropPanY*slackY;
+    return { sx: cx-cw/2, sy: cy-ch/2, sw: cw, sh: ch };
+  }
+
+  function renderCropPreview(){
+    if(!srcCanvas || mode !== 'impressao') return;
+    const ctx = cropCanvas.getContext('2d');
+    const bw = cropCanvas.width, bh = cropCanvas.height;
+    ctx.clearRect(0,0,bw,bh);
+    if(fitMode === 'contain'){
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0,0,bw,bh);
+      const scale = Math.min(bw/srcCanvas.width, bh/srcCanvas.height);
+      const dw = srcCanvas.width*scale, dh = srcCanvas.height*scale;
+      ctx.drawImage(srcCanvas, (bw-dw)/2, (bh-dh)/2, dw, dh);
+    } else {
+      const r = getCropRect();
+      if(!r) return;
+      ctx.drawImage(srcCanvas, r.sx, r.sy, r.sw, r.sh, 0, 0, bw, bh);
+    }
+  }
+
+  // ---------- laser live preview ----------
+  function fastPosterizePreview(){
+    if(mode !== 'laser' || !srcCanvas) return;
+    const maxDim = 640;
+    const ratio = Math.min(1, maxDim/Math.max(srcCanvas.width, srcCanvas.height));
+    const pw = Math.max(1, Math.round(srcCanvas.width*ratio));
+    const ph = Math.max(1, Math.round(srcCanvas.height*ratio));
+    const tmp = document.createElement('canvas');
+    tmp.width = pw; tmp.height = ph;
+    const tctx = tmp.getContext('2d');
+    tctx.drawImage(srcCanvas, 0, 0, pw, ph);
+    let data = tctx.getImageData(0,0,pw,ph).data;
+    const levels = parseInt(posterizeRange.value,10);
+    const contrastPct = parseInt(contrastRange.value,10);
+    data = grayscaleContrastPosterize(data, pw, ph, levels, contrastPct, invertToggle.checked);
+    tctx.putImageData(new ImageData(data,pw,ph), 0, 0);
+    showLaserLivePreview(tmp);
+  }
+
+  function showLaserLivePreview(previewCanvas){
+    previewPanel.style.display = 'flex';
+    stage.classList.remove('empty');
+    stage.innerHTML = '';
+    stage.appendChild(progressOverlay);
+    const wrap = document.createElement('div');
+    wrap.className = 'compare-wrap';
+    wrap.id = 'compareWrap';
+    const img = document.createElement('img');
+    img.src = previewCanvas.toDataURL();
+    img.className = 'img-before';
+    wrap.appendChild(img);
+    const liveTag = document.createElement('div');
+    liveTag.className = 'tag-after';
+    liveTag.style.right = '10px'; liveTag.style.left = 'auto';
+    liveTag.textContent = 'PRÉVIA AO VIVO';
+    wrap.appendChild(liveTag);
+    stage.appendChild(wrap);
+    document.getElementById('compareHint').style.display = 'none';
   }
 
   function copyToClipboard(text){
@@ -999,9 +1218,21 @@
 
   function runProcess(){
     try{
-      const ctx = srcCanvas.getContext('2d');
-      let srcData = ctx.getImageData(0,0,srcCanvas.width, srcCanvas.height).data;
-      let srcW = srcCanvas.width, srcH = srcCanvas.height;
+      let workingCanvas = srcCanvas;
+      if(mode === 'impressao' && fitMode === 'cover'){
+        const r = getCropRect();
+        if(r){
+          const cropTemp = document.createElement('canvas');
+          cropTemp.width = Math.max(1, Math.round(r.sw));
+          cropTemp.height = Math.max(1, Math.round(r.sh));
+          cropTemp.getContext('2d').drawImage(srcCanvas, r.sx, r.sy, r.sw, r.sh, 0, 0, cropTemp.width, cropTemp.height);
+          workingCanvas = cropTemp;
+        }
+      }
+
+      const ctx = workingCanvas.getContext('2d');
+      let srcData = ctx.getImageData(0,0,workingCanvas.width, workingCanvas.height).data;
+      let srcW = workingCanvas.width, srcH = workingCanvas.height;
 
       const wantDenoise = denoiseToggle.checked || whatsappToggle.checked;
       if(wantDenoise){
@@ -1015,13 +1246,28 @@
       else if(mode === 'laser') scale = laserScale;
       else scale = currentScale;
 
+      let reqW = null, reqH = null;
+      if(mode === 'impressao'){
+        const wCmVal = parseFloat(wCm.value)||1, hCmVal = parseFloat(hCm.value)||1, dpiVal = parseFloat(dpiSelect.value)||300;
+        reqW = Math.round((wCmVal/2.54)*dpiVal);
+        reqH = Math.round((hCmVal/2.54)*dpiVal);
+        if(reqW*reqH > MAX_OUTPUT_PIXELS){
+          const f = Math.sqrt(MAX_OUTPUT_PIXELS/(reqW*reqH));
+          reqW = Math.round(reqW*f); reqH = Math.round(reqH*f);
+        }
+      }
+
       let outW = Math.round(srcW * scale);
       let outH = Math.round(srcH * scale);
-      if(outW*outH > MAX_OUTPUT_PIXELS){
+      if(mode === 'impressao'){
+        outW = Math.min(outW, reqW);
+        outH = Math.min(outH, reqH);
+      } else if(outW*outH > MAX_OUTPUT_PIXELS){
         const factor = Math.sqrt(MAX_OUTPUT_PIXELS/(outW*outH));
         outW = Math.round(outW*factor);
         outH = Math.round(outH*factor);
       }
+      outW = Math.max(1, outW); outH = Math.max(1, outH);
 
       progressTxt.textContent = 'ampliando (Lanczos)…';
       let resized = resizeLanczos(srcData, srcW, srcH, outW, outH, 3);
@@ -1039,12 +1285,24 @@
         }
       }
 
-      resultCanvas = document.createElement('canvas');
-      resultCanvas.width = outW; resultCanvas.height = outH;
-      const rctx = resultCanvas.getContext('2d');
-      rctx.putImageData(new ImageData(resized, outW, outH), 0, 0);
+      if(mode === 'impressao' && fitMode === 'contain' && (outW < reqW || outH < reqH)){
+        const inner = document.createElement('canvas');
+        inner.width = outW; inner.height = outH;
+        inner.getContext('2d').putImageData(new ImageData(resized, outW, outH), 0, 0);
+        resultCanvas = document.createElement('canvas');
+        resultCanvas.width = reqW; resultCanvas.height = reqH;
+        const rctx = resultCanvas.getContext('2d');
+        rctx.fillStyle = '#ffffff';
+        rctx.fillRect(0,0,reqW,reqH);
+        rctx.drawImage(inner, Math.round((reqW-outW)/2), Math.round((reqH-outH)/2));
+        statNew.textContent = reqW + ' × ' + reqH + ' (com borda branca)';
+      } else {
+        resultCanvas = document.createElement('canvas');
+        resultCanvas.width = outW; resultCanvas.height = outH;
+        resultCanvas.getContext('2d').putImageData(new ImageData(resized, outW, outH), 0, 0);
+        statNew.textContent = outW + ' × ' + outH;
+      }
 
-      statNew.textContent = outW + ' × ' + outH;
       showCompare();
       resultActions.style.display = 'flex';
     }catch(err){
@@ -1178,6 +1436,8 @@
     link.href = pc.toDataURL('image/jpeg', 0.85);
     link.click();
   });
+
+  resizeCropCanvasElement();
 
 })();
 </script>
